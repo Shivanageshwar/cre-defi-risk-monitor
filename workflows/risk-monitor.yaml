@@ -1,0 +1,32 @@
+name: defi-risk-monitor
+
+triggers:
+  - type: blockchain_event
+    contract_address: "<DEFI_VAULT_ADDRESS>"
+    event_signature: "LargeWithdrawal(address,uint256,uint256)"
+
+steps:
+  - id: format_prompt
+    type: transform
+    input:
+      template: |
+        A DeFi vault experienced a large withdrawal.
+        Amount: {{amount}} wei
+        Remaining balance: {{remainingBalance}} wei.
+        Analyze protocol risk and return JSON:
+        { "riskScore": number (1-10), "summary": string }
+
+  - id: call_llm
+    type: http
+    method: POST
+    url: "https://mock-llm-api.local/analyze"
+    body:
+      prompt: "{{format_prompt.output}}"
+
+  - id: submit_onchain
+    type: blockchain_transaction
+    contract_address: "<RISK_ORACLE_ADDRESS>"
+    method: "submitReport(uint8,string)"
+    args:
+      - "{{call_llm.response.riskScore}}"
+      - "{{call_llm.response.summary}}"
